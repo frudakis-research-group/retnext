@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+
+[project]
+name = "retnext"
+dynamic = ["version"]
+authors = [
+  {name="Antonios P. Sarikas", email="antonios.sarikas@gmail.com"},
+]
+license = {text = "GPL-3.0-only"}
+
+description = "A lightweight package for deep learning on energy voxels"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: POSIX :: Linux",
+]
+
+dependencies = ["torch"]
+
+[project.urls]
+Homepage = "https://github.com/adosar/retnext"
+Issues = "https://github.com/adosar/retnext/issues"
