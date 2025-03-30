@@ -60,7 +60,7 @@ class RetNeXt(nn.Module):
             global_pool_layer = nn.AdaptiveAvgPool3d(1)
 
         self.backbone = nn.Sequential(
-                nn.BatchNorm3d(in_channels, affine=False),
+                nn.BatchNorm3d(in_channels, affine=False, momentum=None),
                 conv3d_block(
                     in_channels, 32, kernel_size=3, bias=False,
                     padding='same', padding_mode=padding_mode
