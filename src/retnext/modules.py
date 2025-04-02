@@ -31,7 +31,7 @@ class RetNeXt(nn.Module):
     Examples
     --------
     >>> x = torch.randn(8, 3, 32, 32, 32)
-    >>> model = RetNeXt(3, 100, max_global_pool=False, padding_mode='circular')
+    >>> model = RetNeXt(3, 100, max_global_pool=False)
 
     >>> model(x).shape
     torch.Size([8, 100])
@@ -50,7 +50,6 @@ class RetNeXt(nn.Module):
             n_outputs: int = 1,
             *,
             max_global_pool: bool = True,
-            padding_mode: str,
             ):
         super().__init__()
 
@@ -61,23 +60,11 @@ class RetNeXt(nn.Module):
 
         self.backbone = nn.Sequential(
                 nn.BatchNorm3d(in_channels, affine=False, momentum=None),
-                conv3d_block(
-                    in_channels, 32, kernel_size=3, bias=False,
-                    padding='same', padding_mode=padding_mode
-                    ),
-                conv3d_block(
-                    32, 32, kernel_size=3, bias=False,
-                    padding='same', padding_mode=padding_mode
-                    ),
+                conv3d_block(in_channels, 32, kernel_size=3, bias=False, padding='same'),
+                conv3d_block(32, 32, kernel_size=3, bias=False, padding='same'),
                 nn.MaxPool3d(kernel_size=2),  # 1st pooling layer.
-                conv3d_block(
-                    32, 64, kernel_size=3, bias=False,
-                    padding='same', padding_mode=padding_mode
-                    ),
-                conv3d_block(
-                    64, 64, kernel_size=3, bias=False,
-                    padding='same', padding_mode=padding_mode
-                    ),
+                conv3d_block(32, 64, kernel_size=3, bias=False, padding='same'),
+                conv3d_block(64, 64, kernel_size=3, bias=False, padding='same'),
                 nn.MaxPool3d(kernel_size=2),  # 2nd pooling layer.
                 conv3d_block(64, 128, kernel_size=3, bias=False),
                 conv3d_block(128, 128, kernel_size=3, bias=False),
