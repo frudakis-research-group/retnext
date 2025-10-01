@@ -78,7 +78,7 @@ model.fc = torch.nn.Identity()  # So .forward() returns the embeddings.
 # Extract features
 Z = torch.cat([model(x.to(device)) for x, _ in dataloader])
 
-# Store features as .csv file
+# Store features in .csv file
 df = pd.DataFrame(Z.numpy(), index=names)
 df.to_csv(f'emdeddings.csv', index=True, index_label='name')
 ```
@@ -88,10 +88,46 @@ df.to_csv(f'emdeddings.csv', index=True, index_label='name')
 1. Split the data into train, validation and test:
 
 ```bash
-aidsorb prepare path/to/voxels_data/ --split_ratio='[0.7, 0.15, 0.15]'
+aidsorb prepare path/to/voxels_data/ --split_ratio='[0.7, 0.15, 0.15]' --seed=42
 ```
 
-2. Freeze part of the model:
+2. Freeze part of the model and fine-tune it:
+
+```python
+import torch
+from lightning.pytorch import Trainer, seed_everything
+from torchmetrics import R2Score, MeanAbsoluteError, MetricCollection
+from aidsorb.datamodules import PCDDataModule as VoxelsDataModule
+from aidsorb.litmodules import PCDLit as VoxelsLit
+from torchvision.transforms.v2 import Compose, RandomChoice
+from retnext.modules import RetNeXt
+from retnext.transforms import AddChannelDim, BoltzmannFactor
+
+# Freeze parts of the backbone
+model = RetNeXt(pretrained=True)
+model.backbone[:7].requires_grad_(False)
+model.backbone[:7].eval()
+
+# Create the datamodule
+datamodule = ...
+datamodule.setup()
+
+# Create the trainer
+trainer = L.Trainer(...)
+
+# Create the litmodel
+loss = torch.nn.MSELoss()
+
+litmodel = VoxelsLit(model=model, )
+
+
+# Initialize last bias with target mean (optional but recommended)
+train_names = list(datamodule.train_dataset.pcd_names)
+y_train_mean = datamodule.train_dataset.Y.loc[train_names].mean().item()
+torch.nn.init.constant_(model.fc.bias, y_train_mean)
+
+trainer.fit(litmodel, datamodule=datamodule)
+```
 
 <details>
 <summary>Show RetNeXt architecture</summary>
@@ -140,20 +176,6 @@ RetNeXt(
 ```
 </details>
 
-```python
-from torchvision.transforms.v2 import Compose, RandomChoice
-
-# Freeze the model
-model.requires_grad_(False)
-model.eval()
-model.fc = torch.nn.Identity() # So .forward() returns the embeddings.
-
-
-# Initialize bias of last layer with target mean
-train_names = list(train_loader.dataset.pcd_names)
-y_train_mean = train_loader.dataset.Y.loc[train_names].mean().item()
-torch.nn.init.constant_(litmodel.model.fc.bias, y_train_mean)
-```
 
 ## 📑 Citing
 If you Please use the following BibTeX entry:
@@ -176,4 +198,5 @@ If you Please use the following BibTeX entry:
 
 ## ⚖️ License
 **RetNeXt** is released under the [GNU General Public License v3.0 only](https://spdx.org/licenses/GPL-3.0-only.html).
+
 
