@@ -15,7 +15,7 @@ authors = [
 ]
 license = {text = "GPL-3.0-only"}
 
-description = "A lightweight package for deep learning on energy voxels"
+description = "A lightweight package for deep learning on 3D energy images of porous materials"
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
