@@ -95,12 +95,84 @@ df.to_csv(f'emdeddings.csv', index=True, index_label='name')
 aidsorb prepare path/to/voxels_data/ --split_ratio='[0.7, 0.15, 0.15]' --seed=42
 ```
 
-2. Freeze part of the model and fine-tune it:
+2. Freeze part of the model and train it:
 
 > [!NOTE]
 > **The following example shows how to use the pretrained model for a regression task.**
 > For classification, you only need to adjust the final layer, e.g. `model = RetNeXt(n_outputs=10, pretrained=True)`
 > for a 10-class classification task, and use the proper loss and metrics.
+
+```python
+import torch
+from lightning.pytorch import Trainer, seed_everything
+from torchmetrics import R2Score, MeanAbsoluteError, MetricCollection
+from aidsorb.datamodules import PCDDataModule as VoxelsDataModule
+from aidsorb.litmodules import PCDLit as VoxelsLit
+from torchvision.transforms.v2 import Compose, RandomChoice
+from retnext.modules import RetNeXt
+from retnext.transforms import AddChannelDim, BoltzmannFactor, RandomRotate90, RandomReflect, RandomFlip
+
+# For reproducibility
+seed_everything(42, workers=True)
+
+# Load pretrained weights
+model = RetNeXt(pretrained=True)
+
+# Fine-tune the last two conv and output layers
+model.backbone[:7].requires_grad_(False)
+model.backbone[:7].eval()
+
+# Fine-tune all layers (just freeze the first BN which acts as standardizer)
+#model.backbone[0].requires_grad_(False)
+#model.backbone[0].eval()
+
+# Preprocessing and data augmentation transformations
+eval_transform_x = Compose([AddChannelDim(), BoltzmannFactor()])
+train_transform_x = Compose([
+    AddChannelDim(), BoltzmannFactor(),
+    RandomChoice([
+        torch.nn.Identity(),
+        RandomRotate90(),
+        RandomFlip(),
+        RandomReflect()
+        ])
+    ])
+
+# Create the datamodule
+datamodule = VoxelsDataModule(
+    path_to_X='path/to/voxels_data/',
+	path_to_Y='path/to/labels.csv',
+    index_col='id',
+	labels=['adsorption_property'],
+    train_batch_size=32, eval_batch_size=256,
+    train_transform_x, eval_transform_x,
+    shuffle=True, drop_last=True,
+    config_dataloaders=dict(num_workers=8),
+)
+datamodule.setup()
+
+# Configure loss, metrics and optimizer
+criterion = torch.nn.MSELoss()
+metric = MetricCollection(R2Score(), MeanAbsoluteError())
+config_optimizer = dict(name='Adam', hparams=dict(lr=1e-3))  # Adjust the learning rate
+
+# Create the litmodel
+litmodel = VoxelsLit(model, criterion, metric=metric, config_optimizer=config_optimizer)
+
+# Create the trainer
+trainer = L.Trainer(max_epochs=5)
+
+# Initialize last bias with target mean (optional but recommended)
+train_names = list(datamodule.train_dataset.pcd_names)
+y_train_mean = datamodule.train_dataset.Y.loc[train_names].mean().item()
+torch.nn.init.constant_(litmodel.model.fc.bias, y_train_mean)
+
+# Train and test the model
+trainer.fit(litmodel, datamodule=datamodule)
+trainer.test(litmodel, datamodule=datamodule)
+```
+
+For more details and customization options, refer to the [AIdsorb documentation](https://aidsorb.readthedocs.io).
 
 <details>
 <summary>Show RetNeXt architecture</summary>
@@ -162,72 +234,6 @@ sample_005,0.987
 ```
 </details>
 
-```python
-import torch
-from lightning.pytorch import Trainer, seed_everything
-from torchmetrics import R2Score, MeanAbsoluteError, MetricCollection
-from aidsorb.datamodules import PCDDataModule as VoxelsDataModule
-from aidsorb.litmodules import PCDLit as VoxelsLit
-from torchvision.transforms.v2 import Compose, RandomChoice
-from retnext.modules import RetNeXt
-from retnext.transforms import AddChannelDim, BoltzmannFactor, RandomRotate90, RandomReflect, RandomFlip
-
-# For reproducibility
-seed_everything(42, workers=True)
-
-# Freeze all layers except the last two Conv and output layer
-model = RetNeXt(pretrained=True)
-model.backbone[:7].requires_grad_(False)
-model.backbone[:7].eval()
-
-# Preprocessing and data augmentation transformations
-eval_transform_x = Compose([AddChannelDim(), BoltzmannFactor()])
-train_transform_x = Compose([
-    AddChannelDim(), BoltzmannFactor(),
-    RandomChoice([
-        torch.nn.Identity(),
-        RandomRotate90(),
-        RandomFlip(),
-        RandomReflect()
-        ])
-    ])
-
-# Create the datamodule
-datamodule = VoxelsDataModule(
-    path_to_X='path/to/voxels_data/',
-	path_to_Y='path/to/labels.csv',
-    index_col='id',
-	labels=['adsorption_property'],
-    train_batch_size=32, eval_batch_size=256,
-    train_transform_x, eval_transform_x,
-    shuffle=True, drop_last=True,
-    config_dataloaders=dict(num_workers=8),
-)
-datamodule.setup()
-
-# Configure loss, metrics and optimizer
-criterion = torch.nn.MSELoss()
-metric = MetricCollection(R2Score(), MeanAbsoluteError())
-config_optimizer = dict(name='Adam', hparams=dict(lr=1e-3))  # Adjust the learning rate
-
-# Create the litmodel
-litmodel = VoxelsLit(model, criterion, metric=metric, config_optimizer=config_optimizer)
-
-# Create the trainer
-trainer = L.Trainer(max_epochs=5)
-
-# Initialize last bias with target mean (optional but recommended)
-train_names = list(datamodule.train_dataset.pcd_names)
-y_train_mean = datamodule.train_dataset.Y.loc[train_names].mean().item()
-torch.nn.init.constant_(litmodel.model.fc.bias, y_train_mean)
-
-# Train and test the model
-trainer.fit(litmodel, datamodule=datamodule)
-trainer.test(litmodel, datamodule=datamodule)
-```
-
-For more details and customization options, refer to the [AIdsorb documentation](https://aidsorb.readthedocs.io).
-
 
 ## 📑 Citing
 If you Please use the following BibTeX entry:
@@ -239,5 +245,3 @@ Add bibtex entry.
 
 ## ⚖️ License
 **RetNeXt** is released under the [GNU General Public License v3.0 only](https://spdx.org/licenses/GPL-3.0-only.html).
-
-
